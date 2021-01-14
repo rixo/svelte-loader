@@ -1,6 +1,8 @@
+const path = require('path');
 const { getOptions } = require('loader-utils');
-
 const { compile, preprocess } = require('svelte/compiler');
+
+const { makeHot } = require('./lib/make-hot');
 
 const pluginOptions = {
 	preprocess: true,
@@ -56,6 +58,9 @@ module.exports = function(source, map) {
 	const options = Object.assign({}, getOptions(this));
 	const callback = this.async();
 
+	const isServer = this.target === 'node' || (options.generate && options.generate == 'ssr');
+	const isProduction = this.minimize || process.env.NODE_ENV === 'production';
+
 	if (options.cssPath) {
 		const css = virtualModules.get(options.cssPath);
 		virtualModules.delete(options.cssPath);
@@ -86,13 +91,20 @@ module.exports = function(source, map) {
 			}
 		}
 
-		let { js, css, warnings } = normalize(compile(processed.toString(), compileOptions));
+		const compiled = compile(processed.toString(), compileOptions);
+		let { js, css, warnings } = normalize(compiled);
 
 		warnings.forEach(
 			options.onwarn
 				? warning => options.onwarn(warning, handleWarning)
 				: handleWarning
 		);
+
+		if (options.hotReload && !isProduction && !isServer) {
+			const hotOptions = Object.assign({}, options.hotOptions);
+			const id = JSON.stringify(path.relative(process.cwd(), compileOptions.filename));
+			js.code = makeHot(id, js.code, hotOptions, compiled, source, compileOptions);
+		}
 
 		if (options.emitCss && css.code) {
 			const resource = posixify(compileOptions.filename);

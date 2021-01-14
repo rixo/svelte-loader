@@ -145,7 +145,112 @@ This should create an additional `styles.css.map` file.
 
 ### Hot Reload
 
-See [rixo/svelte-hmr](https://github.com/rixo/svelte-hmr#webpack) for info on how to setup hot module reloading (HMR).
+This loader supports component-level HMR via the community supported [svelte-hmr](https://github.com/rixo/svelte-hmr) package. This package serves as a testbed and early access for Svelte HMR, while we figure out how to best include HMR support in the compiler itself (which is tricky to do without unfairly favoring any particular dev tooling). Feedback, suggestion, or help to move HMR forward is welcomed at [svelte-hmr](https://github.com/rixo/svelte-hmr/issues) (for now).
+
+Configure inside your `webpack.config.js`:
+
+```javascript
+module.exports = {
+  ...
+  module: {
+    rules: [
+      ...
+      {
+        test: /\.(html|svelte)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'svelte-loader-hot',
+          options: {
+            // NOTE Svelte's dev mode MUST be enabled for HMR to work
+            // -- in a real config, you'd probably set it to false for prod build,
+            //    based on a env variable or so
+            dev: true,
+
+            // NOTE emitCss: true is currently not supported with HMR
+            emitCss: false,
+            // Enable HMR
+            hotReload: true, // Default: false
+            // Extra HMR options
+            hotOptions: {
+              // Prevent preserving local component state
+              noPreserveState: false,
+
+              // If this string appears anywhere in your component's code, then local
+              // state won't be preserved, even when noPreserveState is false
+              noPreserveStateKey: '@!hmr',
+
+              // Prevent doing a full reload on next HMR update after fatal error
+              noReload: false,
+
+              // Try to recover after runtime errors in component init
+              optimistic: false,
+
+              // --- Advanced ---
+
+              // Prevent adding an HMR accept handler to components with
+              // accessors option to true, or to components with named exports
+              // (from <script context="module">). This have the effect of
+              // recreating the consumer of those components, instead of the
+              // component themselves, on HMR updates. This might be needed to
+              // reflect changes to accessors / named exports in the parents,
+              // depending on how you use them.
+              acceptAccessors: true,
+              acceptNamedExports: true,
+            }
+          }
+        }
+      }
+      ...
+    ]
+  },
+  plugins: [
+    new webpack.HotModuleReplacementPlugin(),
+    ...
+  ]
+}
+```
+
+You also need to add the [HotModuleReplacementPlugin](https://webpack.js.org/plugins/hot-module-replacement-plugin/). There are multiple ways to achieve this.
+
+If you're using webpack-dev-server, you can just pass it the [`hot` option](https://webpack.js.org/configuration/dev-server/#devserverhot) to add the plugin automatically.
+
+Otherwise, you can add it to your webpack config directly:
+
+```js
+const webpack = require('webpack');
+
+module.exports = {
+  ...
+  plugins: [
+    new webpack.HotModuleReplacementPlugin(),
+    ...
+  ]
+}
+```
+
+#### External Dependencies
+
+If you rely on any external dependencies (files required in a preprocessor for example) you might want to watch these files for changes and re-run svelte compile.
+
+Webpack allows [loader dependencies](https://webpack.js.org/contribute/writing-a-loader/#loader-dependencies) to trigger a recompile. svelte-loader exposes this API via `options.externalDependencies`.
+ For example:
+
+```js
+...
+const variables = path.resolve('./variables.js');
+...
+{
+    test: /\.(html|svelte)$/,
+    use: [
+      {
+        loader: 'svelte-loader',
+        options: {
+          externalDependencies: [variables]
+        }
+      }
+    ]
+  }
+```
 
 ## License
 
